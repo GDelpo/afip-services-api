@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+pydantic
+slowapi
+xmltodict
+zeep
+cryptography
+pydantic_settings
+logtail-python
+python-jose
+python-multipart

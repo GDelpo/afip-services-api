@@ -1,0 +1,15 @@
+version: "3.8" # Version of the docker-compose file
+
+services:
+  app-fastapi-afip: # Name of the service
+    build:
+      context: . # Path to the Dockerfile
+      dockerfile: Dockerfile # Name of the Dockerfile
+    image: python_fastapi_afip # Name of the image
+    ports:
+      - "8000:8000" # Port mapping between the container and the host machine (host_port:container_port)
+    volumes:
+      - relative_path_to_your_folder: /app/credentials # Volume mapping between the host machine and the container (host_path:container_path)
+      - ./logs:/app/logs # Volume mapping between the host machine and the container (host_path:container_path) 
+    environment:
+      - TZ=America/Argentina/Buenos_Aires # Timezone of the container

@@ -1,0 +1,18 @@
+# Caché de Python
+__pycache__/
+
+# Entornos virtuales y archivos de configuración
+env/
+venv/
+.env
+docker-compose.yml
+
+# Certificados y autenticaciones
+certificates/
+auth_afip/
+
+# Archivos de logs y scripts de Windows
+*.log
+logs/
+*.bat
+*.cmd
