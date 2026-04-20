@@ -1,15 +1,21 @@
-version: "3.8" # Version of the docker-compose file
-
 services:
-  app-fastapi-afip: # Name of the service
+  afip-services-api:
     build:
-      context: . # Path to the Dockerfile
-      dockerfile: Dockerfile # Name of the Dockerfile
-    image: python_fastapi_afip # Name of the image
+      context: .
+      dockerfile: Dockerfile
+    image: afip-services-api:latest
+    container_name: afip_services_api
+    restart: unless-stopped
+    env_file: .env
     ports:
-      - "8000:8000" # Port mapping between the container and the host machine (host_port:container_port)
+      - "8000:8000"
     volumes:
-      - relative_path_to_your_folder: /app/credentials # Volume mapping between the host machine and the container (host_path:container_path)
-      - ./logs:/app/logs # Volume mapping between the host machine and the container (host_path:container_path) 
-    environment:
-      - TZ=America/Argentina/Buenos_Aires # Timezone of the container
+      # Mount your AFIP cert/key into /app/credentials (paths configured via .env)
+      - ./credentials:/app/credentials:ro
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
