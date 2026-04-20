@@ -109,6 +109,19 @@ docker compose up -d --build
 | POST   | `/api/v1/padron` | JWT | Query WS_SR_PADRON_A13 for a list of CUITs |
 | GET    | `/api/v1/padron/health` | JWT | Ping AFIP padrón dummy |
 
+## Adding a new AFIP service
+
+This API wraps services declared in the underlying [`afip-services`](https://github.com/GDelpo/afip-services) package (v0.2+). The catalog lives in a YAML file inside that package — `afip_services/services.yaml`.
+
+**If the new service is padron-family** (same CUITs-in / personas-out shape):
+
+1. Add an entry to `services.yaml` in the package repo (kind `padron_list` or `padron_single`). No Python code needed.
+2. Here in the API, copy the `/padron` block in `app/api.py` and `PadronService` in `app/dependencies.py` to register a new route + injected WSN client for the service.
+
+**If the new service has a different shape** (wsfe, wsmtx, wsfexv1, …): add the YAML entry with a custom `kind`, register a handler in the package with `@register_handler("your_kind")`, then add the route here wrapping `wsn.request(**kwargs)`.
+
+See the package README for the full extension guide.
+
 ## Related
 
 - [`afip-services`](https://github.com/GDelpo/afip-services) — Python package with the WSAA + SOAP logic consumed by this API.
