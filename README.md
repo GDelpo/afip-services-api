@@ -1,56 +1,83 @@
 # afip-services-api
 
 <p>
-  <img alt="Python" src="https://img.shields.io/badge/python-3.9%2B-blue?logo=python&logoColor=white">
-  <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-0.109-009688?logo=fastapi&logoColor=white">
+  <img alt="Python" src="https://img.shields.io/badge/python-3.14-blue?logo=python&logoColor=white">
+  <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-0.128-009688?logo=fastapi&logoColor=white">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
   <img alt="Status" src="https://img.shields.io/badge/status-stable-green">
 </p>
 
-> REST API FastAPI que expone los web services SOAP de AFIP/ARCA (WSAA + WSN) con autenticación JWT, rate limiting y deploy con Docker Compose.
+> REST API FastAPI that wraps the AFIP/ARCA SOAP web services (WSAA + WSN) with JWT auth, a minimal admin dashboard and a Docker-ready multi-stage image.
 
 ## Features
 
-- Endpoints REST para consultar padrón e inscripción de AFIP.
-- Autenticación JWT — `/token` emite, el resto valida.
-- Rate limiting configurable (`slowapi`).
-- Logging estructurado con request ID por llamada.
-- Docker Compose listo — gunicorn + uvicorn workers.
-- Cache in-memory de tickets WSAA (renovación automática).
+- REST endpoints to query AFIP padrón e inscripción de personas.
+- JWT authentication — `POST /api/v1/token` issues, everything else validates.
+- `/health` at the root (no auth) for orchestrators.
+- Configurable rate limiting (`slowapi`).
+- Structured JSON logging (prod) / text (dev) with request-id per call.
+- Dockerfile multi-stage + Gunicorn (uvicorn workers) running as non-root user.
+- Minimal admin dashboard (Jinja2 + Tailwind CDN) with login + home + service health badges.
+- **Dedup**: the SOAP/WSAA layer lives in the external [`afip-services`](https://github.com/GDelpo/afip-services) package (installed via pip), not copied into this repo.
+
+## Architecture
+
+```
+afip-services-api/
+├── Dockerfile              # Multi-stage Python 3.14 + gunicorn
+├── docker-compose-example.yml
+├── requirements.txt        # Pinned deps + afip-services @ git main
+├── .env.example
+└── app/
+    ├── main.py             # App factory, lifespan, middleware, /health
+    ├── config.py           # pydantic-settings (model_validator + computed_field)
+    ├── api.py              # Single APIRouter: /token, /inscription, /padron
+    ├── service.py          # Business logic (uses afip_services package)
+    ├── schemas.py          # Pydantic models (camelCase aliasing)
+    ├── dependencies.py     # Annotated deps (CurrentUser, InscriptionService…)
+    ├── security.py         # JWT create + verify
+    ├── middleware.py       # ProxyHeaders + RequestLogging
+    ├── exceptions.py       # ServiceException + handlers
+    ├── limiter.py          # slowapi Limiter
+    ├── logger.py           # configure_logging() — JSON/text
+    └── dashboard/
+        ├── routes.py       # /dashboard + /dashboard/login
+        ├── static/         # self-hosted assets (future)
+        └── templates/      # base, shell, login, pages, _partials, _js
+```
+
+**Middleware order** (see CLAUDE.md): `ProxyHeadersMiddleware` → `RequestLoggingMiddleware` → `CORSMiddleware` → `SlowAPIMiddleware`.
 
 ## Requirements
 
-- Python 3.9+
-- **Certificado + clave AFIP** registrados.
-- Docker + Docker Compose (opcional para el deploy con una sola línea).
+- Python 3.14 (also runs on 3.12+).
+- AFIP **certificate + private key** registered for homologación/producción.
+- Docker + Docker Compose for container deploys.
 
 ## Quickstart
 
-### Install (local)
+### Local
 
 ```bash
 git clone https://github.com/GDelpo/afip-services-api.git
 cd afip-services-api
 python -m venv env
-source env/bin/activate
+.\env\Scripts\Activate.ps1       # Windows
+# source env/bin/activate        # Linux/macOS
 pip install -r requirements.txt
-cp .env-example .env
-# Editar .env con tu cert, key, y SECRET_KEY JWT
+cp .env.example .env             # edit cert/key paths + AUTH_* + SECRET_KEY
+uvicorn app.main:app --reload --port 8000
 ```
 
-### Run (local)
+- Swagger UI: <http://localhost:8000/api/v1/docs>
+- Health: <http://localhost:8000/health>
+- Dashboard: <http://localhost:8000/dashboard>
 
-```bash
-uvicorn main:app --reload --port 8000
-```
-
-Docs interactivos: <http://localhost:8000/docs>
-
-### Run (Docker)
+### Docker
 
 ```bash
 cp docker-compose-example.yml docker-compose.yml
-# Editar volúmenes (cert/key) y variables del .env
+# mount your credentials folder (cert/key) and edit .env
 docker compose up -d --build
 ```
 
@@ -58,42 +85,34 @@ docker compose up -d --build
 
 | Variable | Descripción |
 |----------|-------------|
-| `AFIP_ENV` | `testing` o `production` |
-| `AFIP_CERT_PATH` | Path al cert dentro del container |
-| `AFIP_KEY_PATH` | Path a la key dentro del container |
-| `SECRET_KEY` | Firma JWT — generar con `openssl rand -hex 32` |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | TTL del token JWT |
-| `ALLOWED_USERS` | Usuarios válidos (JSON: `{"user": "hashed_pw"}`) |
-| `RATE_LIMIT` | Ej. `100/minute` |
+| `ENVIRONMENT` | `dev` / `staging` / `prod` (drives `is_production` computed_field) |
+| `DEBUG` | `true` turns logging to DEBUG level |
+| `LOG_FORMAT` | `json` (prod) or `text` (dev) |
+| `LOGTAIL_TOKEN` | Optional — enables Logtail handler when set |
+| `AUTH_USERNAME` / `AUTH_PASSWORD` | Single-user fallback |
+| `AUTH_SECRET_KEY` | JWT signing key — `openssl rand -hex 32` |
+| `AUTH_EXPIRES_IN` | Token TTL in minutes |
+| `API_PREFIX` | Defaults to `/api/v1` |
+| `CORS_ORIGINS` | JSON list |
+| `CERTIFICATE_PATH` / `PRIVATE_KEY_PATH` / `PASSPHRASE` | AFIP credentials |
+| `RATE_LIMIT_TIME` / `MAX_CALLS` | slowapi limit (e.g. 60 calls / 60 s) |
 
 ## API
 
-| Método | Path | Descripción |
-|--------|------|-------------|
-| POST | `/token` | Login — devuelve JWT |
-| GET  | `/padron/{cuit}` | Consulta padrón (requiere JWT) |
-| GET  | `/inscription/{cuit}` | Consulta inscripción (requiere JWT) |
-| GET  | `/health` | Health check |
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET    | `/health` | no | Liveness/readiness — returns name + version + environment |
+| GET    | `/dashboard` · `/dashboard/login` | cookie-less (localStorage) | Minimal admin UI |
+| POST   | `/api/v1/token` | no | OAuth2 password → JWT |
+| POST   | `/api/v1/inscription` | JWT | Query WS_SR_CONSTANCIA_INSCRIPCION for a list of CUITs |
+| GET    | `/api/v1/inscription/health` | JWT | Ping AFIP inscription dummy |
+| POST   | `/api/v1/padron` | JWT | Query WS_SR_PADRON_A13 for a list of CUITs |
+| GET    | `/api/v1/padron/health` | JWT | Ping AFIP padrón dummy |
 
-## Architecture
+## Related
 
-```
-afip-services-api/
-├── main.py              # FastAPI entrypoint
-├── app/
-│   ├── afip_ws/         # Capa SOAP WSAA (equivalente a afip-services)
-│   ├── api/             # Routers: auth, padron, inscription
-│   └── core/            # Config, security, limiter, logging
-├── Dockerfile
-└── docker-compose-example.yml
-```
-
-**Stack:** FastAPI + Uvicorn + Gunicorn, `zeep` para SOAP, `python-jose` para JWT, `slowapi` para rate limiting.
-
-## Relacionados
-
-- [`afip-services`](https://github.com/GDelpo/afip-services) — cliente SOAP base standalone (incorporado dentro de este API).
-- [`afip-services-applied`](https://github.com/GDelpo/afip-services-applied) — cliente consumer del API.
+- [`afip-services`](https://github.com/GDelpo/afip-services) — Python package with the WSAA + SOAP logic consumed by this API.
+- [`afip-services-applied`](https://github.com/GDelpo/afip-services-applied) — Example consumer of this API.
 
 ## License
 
