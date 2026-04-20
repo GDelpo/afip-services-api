@@ -1,0 +1,72 @@
+{% extends "shell.html" %}
+
+{% block title %}Home · {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl">
+    <h1 class="text-2xl font-semibold">Panel de control</h1>
+    <p class="mt-1 text-sm text-slate-500">Estado general del API y de los servicios AFIP.</p>
+
+    <div class="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+            <p class="text-xs uppercase tracking-wide text-slate-500">API</p>
+            <p class="mt-1 text-lg font-medium">{{ app_name }}</p>
+            <p class="text-sm text-slate-500">v{{ app_version }} · {{ environment }}</p>
+            <p class="mt-3"><span id="api-health" class="badge badge-amber">Chequeando…</span></p>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+            <p class="text-xs uppercase tracking-wide text-slate-500">AFIP · Inscripción</p>
+            <p class="mt-1 text-lg font-medium">WS_SR_CONSTANCIA_INSCRIPCION</p>
+            <p class="mt-3"><span id="inscription-health" class="badge badge-amber">Chequeando…</span></p>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+            <p class="text-xs uppercase tracking-wide text-slate-500">AFIP · Padrón</p>
+            <p class="mt-1 text-lg font-medium">WS_SR_PADRON_A13</p>
+            <p class="mt-3"><span id="padron-health" class="badge badge-amber">Chequeando…</span></p>
+        </div>
+    </div>
+
+    <div class="mt-8 bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+        <h2 class="text-lg font-medium">Próximamente</h2>
+        <p class="mt-2 text-sm text-slate-500">Este dashboard es una base funcional. Futuras iteraciones incluirán: formulario de consulta de CUIT, historial de llamadas y métricas de rate limiting.</p>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    (async function () {
+        const setBadge = (id, ok, text) => {
+            const el = document.getElementById(id);
+            el.textContent = text;
+            el.classList.remove("badge-amber");
+            el.classList.add(ok ? "badge-green" : "badge-red");
+        };
+        try {
+            const r = await fetch("/health");
+            setBadge("api-health", r.ok, r.ok ? "UP" : "DOWN");
+        } catch (e) { setBadge("api-health", false, "ERROR"); }
+
+        // Require a token for AFIP dummy endpoints
+        const token = localStorage.getItem("afip_token");
+        if (!token) {
+            setBadge("inscription-health", false, "Sin sesión");
+            setBadge("padron-health", false, "Sin sesión");
+            return;
+        }
+        const call = async (path, badge) => {
+            try {
+                const r = await fetch("{{ api_prefix }}" + path, {
+                    headers: { Authorization: "Bearer " + token },
+                });
+                if (r.status === 401) { window.location.href = "/dashboard/login"; return; }
+                const body = await r.json();
+                const st = (body.status || "DOWN").toUpperCase();
+                setBadge(badge, st === "UP", st);
+            } catch (e) { setBadge(badge, false, "ERROR"); }
+        };
+        call("/inscription/health", "inscription-health");
+        call("/padron/health", "padron-health");
+    })();
+</script>
+{% endblock %}
