@@ -1,0 +1,43 @@
+<script>
+    // Shared dashboard auth helpers.
+    (function () {
+        const token = localStorage.getItem("afip_token");
+        const user = localStorage.getItem("afip_user");
+        const path = window.location.pathname;
+
+        // Redirect unauthenticated users hitting protected dashboard pages.
+        if (path.startsWith("/dashboard") && path !== "/dashboard/login" && !token) {
+            window.location.href = "/dashboard/login";
+            return;
+        }
+
+        // Populate topbar user if present.
+        const topbarUser = document.getElementById("topbar-user");
+        if (topbarUser && user) topbarUser.textContent = user;
+
+        // Wire logout button.
+        const logoutBtn = document.getElementById("logout-btn");
+        if (logoutBtn) {
+            logoutBtn.addEventListener("click", () => {
+                localStorage.removeItem("afip_token");
+                localStorage.removeItem("afip_user");
+                window.location.href = "/dashboard/login";
+            });
+        }
+
+        // Small helper for authed fetches.
+        window.apiFetch = async function (path, init = {}) {
+            const headers = Object.assign(
+                {},
+                init.headers || {},
+                token ? { Authorization: "Bearer " + token } : {}
+            );
+            const res = await fetch(path, Object.assign({}, init, { headers }));
+            if (res.status === 401) {
+                localStorage.removeItem("afip_token");
+                window.location.href = "/dashboard/login";
+            }
+            return res;
+        };
+    })();
+</script>

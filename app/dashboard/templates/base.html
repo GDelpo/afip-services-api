@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}{{ app_name }}{% endblock %}</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2280%22>🧾</text></svg>" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+        .badge { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 500; }
+        .badge-green { background: #dcfce7; color: #166534; }
+        .badge-amber { background: #fef3c7; color: #92400e; }
+        .badge-red   { background: #fee2e2; color: #991b1b; }
+    </style>
+    {% block head_extra %}{% endblock %}
+</head>
+<body class="h-full bg-slate-50 text-slate-900 antialiased">
+    {% block body %}{% endblock %}
+    {% include "_js/_auth.js.html" %}
+    {% block scripts %}{% endblock %}
+</body>
+</html>

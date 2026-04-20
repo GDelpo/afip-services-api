@@ -1,0 +1,20 @@
+<aside class="w-60 shrink-0 border-r border-slate-200 bg-white flex flex-col">
+    <div class="h-14 flex items-center px-4 border-b border-slate-200">
+        <div class="h-8 w-8 rounded-lg bg-slate-900 text-white flex items-center justify-center text-sm font-bold">A</div>
+        <span class="ml-2 font-semibold">{{ app_name }}</span>
+    </div>
+    <nav class="p-3 space-y-1 text-sm flex-1">
+        <a href="/dashboard" class="block px-3 py-2 rounded-lg {% if active_page == 'home' %}bg-slate-900 text-white{% else %}hover:bg-slate-100{% endif %}">
+            Home
+        </a>
+        <a href="{{ api_prefix }}/docs" target="_blank" rel="noopener"
+           class="block px-3 py-2 rounded-lg hover:bg-slate-100">
+            API Docs ↗
+        </a>
+    </nav>
+    <div class="p-3 border-t border-slate-200">
+        <button id="logout-btn" class="w-full text-left text-sm text-slate-600 hover:text-slate-900 px-3 py-2 rounded-lg hover:bg-slate-100">
+            Salir
+        </button>
+    </div>
+</aside>
