@@ -111,16 +111,32 @@ docker compose up -d --build
 
 ## Adding a new AFIP service
 
-This API wraps services declared in the underlying [`afip-services`](https://github.com/GDelpo/afip-services) package (v0.2+). The catalog lives in a YAML file inside that package — `afip_services/services.yaml`.
+This API wraps services declared in the underlying [`afip-services`](https://github.com/GDelpo/afip-services) package (v0.2+). The catalog lives in `afip_services/services.yaml`.
 
-**If the new service is padron-family** (same CUITs-in / personas-out shape):
+**Padron-family service (list in → personas out):** edit the YAML — no code.
 
-1. Add an entry to `services.yaml` in the package repo (kind `padron_list` or `padron_single`). No Python code needed.
-2. Here in the API, copy the `/padron` block in `app/api.py` and `PadronService` in `app/dependencies.py` to register a new route + injected WSN client for the service.
+```yaml
+services:
+  WS_SR_PADRON_A4:
+    testing_service_url: https://awshomo.afip.gov.ar/...
+    testing_wsdl_url:   https://awshomo.afip.gov.ar/...
+    production_service_url: https://aws.afip.gov.ar/...
+    production_wsdl_url:    https://aws.afip.gov.ar/...
+    service_name: ws_sr_padron_a4
+    method_name:  getPersona
+    kind:         padron_single     # or padron_list
+    slug:         padron-a4         # public route path
+    description:  AFIP Padrón A4
+```
 
-**If the new service has a different shape** (wsfe, wsmtx, wsfexv1, …): add the YAML entry with a custom `kind`, register a handler in the package with `@register_handler("your_kind")`, then add the route here wrapping `wsn.request(**kwargs)`.
+At startup this API iterates the catalog and auto-registers:
 
-See the package README for the full extension guide.
+- `POST /api/v1/<slug>` — query by list of CUITs (JWT required)
+- `GET  /api/v1/<slug>/health` — dummy ping (JWT required)
+
+**Custom-shape service (wsfe, wsmtx, wsfexv1, …):** add the YAML entry with a custom `kind`, register a handler in the package with `@register_handler("your_kind")`, and add the route manually in `app/api.py`. The auto-registration skips kinds not in `AUTO_KINDS` (`padron_list`, `padron_single`).
+
+See the [`afip-services` README](https://github.com/GDelpo/afip-services) for the package-level extension guide.
 
 ## Related
 

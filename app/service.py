@@ -1,8 +1,8 @@
-"""Business layer — orchestrates calls to the external `afip_services` package."""
+"""Business layer — builds WSN clients from the catalog and delegates calls."""
 
 from typing import Any
 
-from afip_services import WSN, WSNService
+from afip_services import WSN, WSNService, get_catalog
 
 from app.config import settings
 from app.exceptions import AFIPUnavailableError
@@ -11,32 +11,55 @@ from app.logger import get_logger
 logger = get_logger(__name__)
 
 
-def initialize_services() -> tuple[WSN, WSN]:
-    """Build + authenticate both WSN clients (inscription + padrón)."""
+# Kinds we can auto-wire to a POST /<slug> + GET /<slug>/health pair.
+AUTO_KINDS = {"padron_list", "padron_single"}
+
+
+def initialize_clients() -> dict[WSNService, WSN]:
+    """Iterate the catalog and build one authenticated WSN client per service.
+
+    Services with a ``kind`` outside ``AUTO_KINDS`` are skipped (they need a
+    custom handler + manually-defined routes).
+
+    Returns a dict keyed by the ``WSNService`` enum member; callers store it
+    in ``app.state.wsn_clients`` so request handlers can look up their client
+    by enum key.
+    """
     logger.info(
-        "Initializing AFIP WSN clients (is_production=%s)", settings.is_production
-    )
-
-    wsn_inscription = WSN(
-        WSNService.WS_SR_CONSTANCIA_INSCRIPCION,
-        settings.certificate_path,
-        settings.private_key_path,
+        "Initializing AFIP WSN clients from catalog (is_production=%s)",
         settings.is_production,
-        settings.passphrase,
     )
-    wsn_inscription.obtain_authorization_ticket()
+    clients: dict[WSNService, WSN] = {}
 
-    wsn_padron = WSN(
-        WSNService.WS_SR_PADRON_A13,
-        settings.certificate_path,
-        settings.private_key_path,
-        settings.is_production,
-        settings.passphrase,
-    )
-    wsn_padron.obtain_authorization_ticket()
+    for name, cfg in get_catalog().items():
+        if cfg.kind not in AUTO_KINDS:
+            logger.info(
+                "Skipping service %s (kind=%s is not auto-wired; "
+                "register a custom route manually)",
+                name,
+                cfg.kind,
+            )
+            continue
 
-    logger.info("AFIP WSN clients initialized")
-    return wsn_inscription, wsn_padron
+        service_enum = WSNService[name]
+        try:
+            client = WSN(
+                service_enum,
+                settings.certificate_path,
+                settings.private_key_path,
+                settings.is_production,
+                settings.passphrase,
+            )
+            client.obtain_authorization_ticket()
+            clients[service_enum] = client
+            logger.info("Initialized WSN client for %s (slug=%s)", name, cfg.slug)
+        except Exception:
+            logger.exception("Failed to initialize WSN client for %s", name)
+            # Keep starting — other services may still work; the route for
+            # this one will return 503 at call time.
+
+    logger.info("Ready — %d/%d services initialized", len(clients), len(get_catalog()))
+    return clients
 
 
 def fetch_personas(service: WSN, persona_ids: list[int]) -> list[dict[str, Any]]:
