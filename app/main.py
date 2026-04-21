@@ -15,7 +15,7 @@ from app.limiter import limiter
 from app.logger import configure_logging, get_logger
 from app.middleware import ProxyHeadersMiddleware, RequestLoggingMiddleware
 from app.schemas import HealthResponse
-from app.service import initialize_services
+from app.service import initialize_clients
 
 configure_logging()
 logger = get_logger(__name__)
@@ -23,25 +23,23 @@ logger = get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # noqa: D401
-    """Initialize AFIP WSN clients at startup and release them at shutdown."""
-    logger.info("Starting %s v%s (environment=%s)",
-                settings.app_name, settings.app_version, settings.environment)
+    """Initialize every WSN client at startup, release them at shutdown."""
+    logger.info(
+        "Starting %s v%s (environment=%s)",
+        settings.app_name, settings.app_version, settings.environment,
+    )
     try:
-        wsn_inscription, wsn_padron = initialize_services()
+        clients = initialize_clients()
     except Exception:
         logger.exception("Could not initialize AFIP services")
-        # Still allow the app to come up so /health and /dashboard/login work
-        wsn_inscription = None
-        wsn_padron = None
+        clients = {}
 
-    app.state.wsn_inscription_service = wsn_inscription
-    app.state.wsn_padron_service = wsn_padron
-    logger.info("AFIP services ready")
+    app.state.wsn_clients = clients
+    logger.info("AFIP services ready (%d active)", len(clients))
     try:
         yield
     finally:
-        app.state.wsn_inscription_service = None
-        app.state.wsn_padron_service = None
+        app.state.wsn_clients = {}
         logger.info("AFIP services released")
 
 

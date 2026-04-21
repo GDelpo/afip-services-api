@@ -2,36 +2,24 @@
 
 from typing import Annotated
 
+from afip_services import WSN, WSNService
 from fastapi import Depends, Request
 
 from app.exceptions import ServiceException
 from app.security import verify_token
 
 
-def get_inscription_service(request: Request):
-    """Return the AFIP inscription WSN client kept in app.state."""
-    service = getattr(request.app.state, "wsn_inscription_service", None)
-    if service is None:
+def get_wsn_client(request: Request, service_enum: WSNService) -> WSN:
+    """Fetch the WSN client for *service_enum* from app state, or 503 if absent."""
+    clients: dict[WSNService, WSN] = getattr(request.app.state, "wsn_clients", {}) or {}
+    client = clients.get(service_enum)
+    if client is None:
         raise ServiceException(
-            "Inscription service is not available",
+            f"Service {service_enum.name} is not available",
             status_code=503,
             code="service_unavailable",
         )
-    return service
-
-
-def get_padron_service(request: Request):
-    """Return the AFIP padrón WSN client kept in app.state."""
-    service = getattr(request.app.state, "wsn_padron_service", None)
-    if service is None:
-        raise ServiceException(
-            "Padrón service is not available",
-            status_code=503,
-            code="service_unavailable",
-        )
-    return service
+    return client
 
 
 CurrentUser = Annotated[dict, Depends(verify_token)]
-InscriptionService = Annotated[object, Depends(get_inscription_service)]
-PadronService = Annotated[object, Depends(get_padron_service)]

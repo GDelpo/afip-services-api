@@ -1,16 +1,16 @@
-"""FastAPI router — exposes /token, /inscription, /padron under the versioned prefix."""
+"""FastAPI router — exposes /token + one auto-registered POST/GET pair per catalog entry."""
 
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from afip_services import WSNService, get_catalog
+from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
+from typing import Annotated
+
+from fastapi import Depends
 
 from app.config import settings
-from app.dependencies import (
-    CurrentUser,
-    InscriptionService,
-    PadronService,
-)
+from app.dependencies import CurrentUser, get_wsn_client
 from app.logger import get_logger
 from app.schemas import (
     AFIPServiceStatus,
@@ -19,7 +19,7 @@ from app.schemas import (
     TokenResponse,
 )
 from app.security import create_access_token
-from app.service import check_service_health, fetch_personas
+from app.service import AUTO_KINDS, check_service_health, fetch_personas
 
 logger = get_logger(__name__)
 
@@ -31,7 +31,7 @@ router = APIRouter()
 
 @router.post("/token", response_model=TokenResponse, tags=["AUTH"])
 async def login_for_access_token(
-    form_data: OAuth2PasswordRequestForm = Depends(),
+    form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
 ) -> TokenResponse:
     """Exchange username/password for a JWT access token."""
     if (
@@ -56,65 +56,67 @@ async def login_for_access_token(
     )
 
 
-# ── Inscription ───────────────────────────────────────────────────────────────
+# ── Auto-registered routes from the catalog ───────────────────────────────────
+#
+# Every service in afip-services' catalog with a built-in kind gets a pair:
+#   POST /<slug>         — query by list of CUITs
+#   GET  /<slug>/health  — reach the AFIP service's dummy endpoint
+#
+# Custom-kind services (wsfe, etc.) are skipped here; add their routes manually.
 
 
-@router.post(
-    "/inscription",
-    response_model=PersonaResponse,
-    tags=["INSCRIPTION"],
-)
-async def get_inscription(
-    payload: PersonaRequest,
-    service: InscriptionService,
-    _: CurrentUser,
-) -> PersonaResponse:
-    """Query the AFIP constancia-de-inscripción WSN for a list of CUITs."""
-    logger.debug("Inscription request for %d ids", len(payload.persona_ids))
-    data = fetch_personas(service, payload.persona_ids)
-    return PersonaResponse(data=data)
+def _build_query_endpoint(service_enum: WSNService):
+    async def endpoint(
+        payload: PersonaRequest,
+        request: Request,
+        _: CurrentUser,
+    ) -> PersonaResponse:
+        service = get_wsn_client(request, service_enum)
+        logger.debug("%s request for %d ids", service_enum.name, len(payload.persona_ids))
+        data = fetch_personas(service, payload.persona_ids)
+        return PersonaResponse(data=data)
+
+    endpoint.__name__ = f"query_{service_enum.name.lower()}"
+    return endpoint
 
 
-@router.get(
-    "/inscription/health",
-    response_model=AFIPServiceStatus,
-    tags=["INSCRIPTION"],
-)
-async def health_inscription(
-    service: InscriptionService,
-    _: CurrentUser,
-) -> AFIPServiceStatus:
-    """Ping AFIP inscription service via dummy method."""
-    return AFIPServiceStatus(**check_service_health(service, "WS_SR_CONSTANCIA_INSCRIPCION"))
+def _build_health_endpoint(service_enum: WSNService):
+    async def endpoint(
+        request: Request,
+        _: CurrentUser,
+    ) -> AFIPServiceStatus:
+        service = get_wsn_client(request, service_enum)
+        return AFIPServiceStatus(**check_service_health(service, service_enum.name))
+
+    endpoint.__name__ = f"health_{service_enum.name.lower()}"
+    return endpoint
 
 
-# ── Padrón ────────────────────────────────────────────────────────────────────
+def _register_catalog_routes(router: APIRouter) -> None:
+    """Iterate the AFIP catalog and register POST/GET per service."""
+    for name, cfg in get_catalog().items():
+        if cfg.kind not in AUTO_KINDS:
+            continue
+        service_enum = WSNService[name]
+        tag = cfg.slug.upper()
+        summary = cfg.description or f"Query {name}"
+
+        router.add_api_route(
+            f"/{cfg.slug}",
+            _build_query_endpoint(service_enum),
+            methods=["POST"],
+            response_model=PersonaResponse,
+            tags=[tag],
+            summary=summary,
+        )
+        router.add_api_route(
+            f"/{cfg.slug}/health",
+            _build_health_endpoint(service_enum),
+            methods=["GET"],
+            response_model=AFIPServiceStatus,
+            tags=[tag],
+            summary=f"Dummy ping for {name}",
+        )
 
 
-@router.post(
-    "/padron",
-    response_model=PersonaResponse,
-    tags=["PADRON"],
-)
-async def get_padron(
-    payload: PersonaRequest,
-    service: PadronService,
-    _: CurrentUser,
-) -> PersonaResponse:
-    """Query the AFIP padrón A13 WSN for a list of CUITs."""
-    logger.debug("Padrón request for %d ids", len(payload.persona_ids))
-    data = fetch_personas(service, payload.persona_ids)
-    return PersonaResponse(data=data)
-
-
-@router.get(
-    "/padron/health",
-    response_model=AFIPServiceStatus,
-    tags=["PADRON"],
-)
-async def health_padron(
-    service: PadronService,
-    _: CurrentUser,
-) -> AFIPServiceStatus:
-    """Ping AFIP padrón service via dummy method."""
-    return AFIPServiceStatus(**check_service_health(service, "WS_SR_PADRON_A13"))
+_register_catalog_routes(router)
