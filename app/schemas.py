@@ -27,6 +27,7 @@ class TokenResponse(_CamelModel):
 
 
 class PersonaRequest(_CamelModel):
+    # AFIP accepts up to 250 ids per getPersonaList_v2 call.
     persona_ids: list[int] = Field(..., min_length=1, max_length=250)
 
 

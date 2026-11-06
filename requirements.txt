@@ -1,13 +1,12 @@
-fastapi==0.128.0
-uvicorn[standard]==0.32.1
-gunicorn==23.0.0
-pydantic==2.12.5
-pydantic-settings==2.7.0
-slowapi==0.1.9
-python-jose[cryptography]==3.3.0
-python-multipart==0.0.20
+fastapi==0.162.0
+uvicorn[standard]==0.54.0
+gunicorn==26.2.0
+pydantic==2.14.2
+pydantic-settings==2.16.2
+slowapi==0.1.10
+PyJWT==2.15.1
+python-multipart==0.0.33
 jinja2==3.1.6
-httpx==0.28.1
-logtail-python==0.2.5
-# AFIP client (standalone package — single source of truth for WSAA/SOAP logic)
-afip-services @ git+https://github.com/GDelpo/afip-services.git@main
+logtail-python==0.5.3
+# AFIP client (standalone package, single source of truth for WSAA/SOAP logic)
+afip-services @ git+https://github.com/GDelpo/afip-services.git@b991b383583a4c27cca37aecf107e1eaec064fbd

@@ -66,9 +66,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         )
 
     @app.exception_handler(RequestValidationError)
-    async def _validation_exception_handler(
-        request: Request, exc: RequestValidationError
-    ):
+    async def _validation_exception_handler(request: Request, exc: RequestValidationError):
         logger.info(
             "Validation error on %s",
             request.url.path,

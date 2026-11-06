@@ -4,7 +4,7 @@ import json
 import logging
 import os
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
@@ -21,7 +21,7 @@ class JsonFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:  # noqa: D401
         payload = {
-            "ts": datetime.utcfromtimestamp(record.created).isoformat() + "Z",
+            "ts": datetime.fromtimestamp(record.created, tz=UTC).isoformat().replace("+00:00", "Z"),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
@@ -36,7 +36,7 @@ class JsonFormatter(logging.Formatter):
                 try:
                     json.dumps(v)
                     payload[k] = v
-                except (TypeError, ValueError):
+                except TypeError, ValueError:
                     payload[k] = str(v)
         return json.dumps(payload, ensure_ascii=False)
 
@@ -99,9 +99,7 @@ def configure_logging() -> None:
         try:
             lt_handler = LogtailHandler(source_token=settings.logtail_token)
             lt_handler.setFormatter(formatter)
-            lt_handler.setLevel(
-                logging.DEBUG if settings.debug else logging.INFO
-            )
+            lt_handler.setLevel(logging.DEBUG if settings.debug else logging.INFO)
             root_logger.addHandler(lt_handler)
         except Exception as exc:  # pragma: no cover
             root_logger.warning("Could not initialize LogtailHandler: %s", exc)

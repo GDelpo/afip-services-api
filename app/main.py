@@ -26,7 +26,9 @@ async def lifespan(app: FastAPI):  # noqa: D401
     """Initialize every WSN client at startup, release them at shutdown."""
     logger.info(
         "Starting %s v%s (environment=%s)",
-        settings.app_name, settings.app_version, settings.environment,
+        settings.app_name,
+        settings.app_version,
+        settings.environment,
     )
     try:
         clients = initialize_clients()
@@ -66,7 +68,9 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
-        allow_credentials=True,
+        # INTENTIONAL: the JWT travels in the Authorization header, never in cookies,
+        # so CORS has no reason to allow credentials.
+        allow_credentials=False,
         allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         allow_headers=["*"],
     )

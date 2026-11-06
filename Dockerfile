@@ -2,11 +2,9 @@
 FROM python:3.14-slim AS builder
 WORKDIR /build
 
-# Compile-time deps only — do not propagate to the runtime stage
+# git is needed to install afip-services from GitHub; it stays in this stage
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
     git \
-    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
@@ -24,9 +22,8 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app \
     TZ=America/Argentina/Buenos_Aires
 
-# Runtime libs only (libpq5, curl for healthcheck, tzdata for TZ)
+# Runtime libs only (curl for healthcheck, tzdata for TZ)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq5 \
     curl \
     tzdata \
     && rm -rf /var/lib/apt/lists/*
@@ -48,8 +45,11 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
 # IMPORTANT: Gunicorn (not `uvicorn --workers`) — on Python 3.14 the default
 # multiprocessing start method is `forkserver`, which breaks uvicorn's workers.
 # Gunicorn uses os.fork() directly and sidesteps the issue.
+# INTENTIONAL: one worker. Each worker asks WSAA for its own ticket at startup, and
+# WSAA refuses a new ticket while the previous one is still valid, so extra workers
+# would start without AFIP clients. Sync endpoints already run in a threadpool.
 CMD ["gunicorn", "app.main:app", \
-     "--workers", "4", \
+     "--workers", "1", \
      "--worker-class", "uvicorn.workers.UvicornWorker", \
      "--bind", "0.0.0.0:8000", \
      "--log-level", "info", \

@@ -34,8 +34,7 @@ def initialize_clients() -> dict[WSNService, WSN]:
     for name, cfg in get_catalog().items():
         if cfg.kind not in AUTO_KINDS:
             logger.info(
-                "Skipping service %s (kind=%s is not auto-wired; "
-                "register a custom route manually)",
+                "Skipping service %s (kind=%s is not auto-wired; register a custom route manually)",
                 name,
                 cfg.kind,
             )
@@ -63,8 +62,9 @@ def initialize_clients() -> dict[WSNService, WSN]:
 
 
 def fetch_personas(service: WSN, persona_ids: list[int]) -> list[dict[str, Any]]:
-    """Delegate to the underlying WSN client to fetch persona data."""
-    return service.request_persona_list(persona_ids)
+    """Fetch persona data, keyed by the id as a string (JSON object keys are strings)."""
+    results = service.request_persona_list(persona_ids)
+    return [{str(pid): data for pid, data in item.items()} for item in results]
 
 
 def check_service_health(service: WSN, service_name: str) -> dict[str, str]:

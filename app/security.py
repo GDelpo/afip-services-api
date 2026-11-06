@@ -1,28 +1,23 @@
 """JWT security helpers — create + verify access tokens."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
+import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
+from jwt import InvalidTokenError
 
 from app.config import settings
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.api_prefix}/token")
 
 
-def create_access_token(
-    data: dict, expires_delta: timedelta | None = None
-) -> str:
+def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
     """Generate a signed JWT with the given payload."""
     to_encode = data.copy()
-    expire = datetime.now(tz=timezone.utc) + (
-        expires_delta or timedelta(minutes=settings.auth_expires_in)
-    )
+    expire = datetime.now(tz=UTC) + (expires_delta or timedelta(minutes=settings.auth_expires_in))
     to_encode.update({"exp": expire})
-    return jwt.encode(
-        to_encode, settings.auth_secret_key, algorithm=settings.auth_algorithm
-    )
+    return jwt.encode(to_encode, settings.auth_secret_key, algorithm=settings.auth_algorithm)
 
 
 def verify_token(token: str = Depends(oauth2_scheme)) -> dict:
@@ -38,7 +33,7 @@ def verify_token(token: str = Depends(oauth2_scheme)) -> dict:
             settings.auth_secret_key,
             algorithms=[settings.auth_algorithm],
         )
-    except JWTError as exc:
+    except InvalidTokenError as exc:
         raise credentials_exc from exc
     if payload.get("sub") is None:
         raise credentials_exc

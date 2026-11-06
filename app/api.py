@@ -1,13 +1,12 @@
 """FastAPI router — exposes /token + one auto-registered POST/GET pair per catalog entry."""
 
+import secrets
 from datetime import timedelta
-
-from afip_services import WSNService, get_catalog
-from fastapi import APIRouter, HTTPException, Request, status
-from fastapi.security import OAuth2PasswordRequestForm
 from typing import Annotated
 
-from fastapi import Depends
+from afip_services import WSNService, get_catalog
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.security import OAuth2PasswordRequestForm
 
 from app.config import settings
 from app.dependencies import CurrentUser, get_wsn_client
@@ -34,10 +33,14 @@ async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
 ) -> TokenResponse:
     """Exchange username/password for a JWT access token."""
-    if (
-        form_data.username != settings.auth_username
-        or form_data.password != settings.auth_password
-    ):
+    # Both checks always run, in constant time, so timing does not reveal which part failed.
+    username_ok = secrets.compare_digest(
+        form_data.username.encode(), settings.auth_username.encode()
+    )
+    password_ok = secrets.compare_digest(
+        form_data.password.encode(), settings.auth_password.encode()
+    )
+    if not (username_ok and password_ok):
         logger.warning("Failed login attempt for user %s", form_data.username)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -65,8 +68,12 @@ async def login_for_access_token(
 # Custom-kind services (wsfe, etc.) are skipped here; add their routes manually.
 
 
+# INTENTIONAL: the AFIP endpoints are plain `def`. zeep blocks, and FastAPI runs
+# sync endpoints in its threadpool instead of on the event loop.
+
+
 def _build_query_endpoint(service_enum: WSNService):
-    async def endpoint(
+    def endpoint(
         payload: PersonaRequest,
         request: Request,
         _: CurrentUser,
@@ -81,7 +88,7 @@ def _build_query_endpoint(service_enum: WSNService):
 
 
 def _build_health_endpoint(service_enum: WSNService):
-    async def endpoint(
+    def endpoint(
         request: Request,
         _: CurrentUser,
     ) -> AFIPServiceStatus:

@@ -16,3 +16,8 @@ auth_afip/
 logs/
 *.bat
 *.cmd
+# AFIP certificate and private key (mounted into the container, never committed)
+credentials/
+*.key
+*.crt
+*.pem

@@ -26,9 +26,9 @@ def mount_static(app):  # pragma: no cover
 @router.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
     return templates.TemplateResponse(
+        request,
         "login.html",
         {
-            "request": request,
             "app_name": settings.app_name,
             "api_prefix": settings.api_prefix,
         },
@@ -39,9 +39,9 @@ async def login_page(request: Request):
 @router.get("/", response_class=HTMLResponse)
 async def dashboard_home(request: Request):
     return templates.TemplateResponse(
+        request,
         "pages/home.html",
         {
-            "request": request,
             "app_name": settings.app_name,
             "app_version": settings.app_version,
             "environment": settings.environment,

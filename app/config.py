@@ -3,7 +3,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, computed_field, model_validator
+from pydantic import Field, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,9 +11,7 @@ class Settings(BaseSettings):
     # App
     app_name: str = "AFIP Services API"
     app_version: str = "0.2.0"
-    app_description: str = (
-        "REST API FastAPI that wraps AFIP/ARCA SOAP web services (WSAA + WSN)."
-    )
+    app_description: str = "REST API FastAPI that wraps AFIP/ARCA SOAP web services (WSAA + WSN)."
     app_author: str = "Guido Delponte"
     app_author_email: str = "guido_delponte@hotmail.com"
 
@@ -28,15 +26,15 @@ class Settings(BaseSettings):
     # Auth (local single-user fallback + JWT)
     auth_username: str
     auth_password: str
-    auth_secret_key: str
+    auth_secret_key: str = Field(min_length=32)  # HS256 needs at least 32 bytes
     auth_algorithm: str = "HS256"
     auth_expires_in: int = 30  # minutes
 
     # API
     api_prefix: str = "/api/v1"
 
-    # CORS
-    cors_origins: list[str] = Field(default_factory=lambda: ["*"])
+    # CORS: no cross-origin access unless origins are listed. The dashboard is same-origin.
+    cors_origins: list[str] = Field(default_factory=list)
 
     # AFIP WSN
     certificate_path: str
@@ -53,11 +51,6 @@ class Settings(BaseSettings):
         extra="ignore",
         case_sensitive=False,
     )
-
-    @model_validator(mode="after")
-    def _resolve_log_format(self) -> "Settings":
-        # Keep JSON in prod; dev/debug users can set LOG_FORMAT=text.
-        return self
 
     @computed_field
     @property
